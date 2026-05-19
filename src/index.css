@@ -1,0 +1,56 @@
+/* remove margens e paddings padrão do navegador e define box-sizing como border-box (padding e border não aumentam o tamanho total dos elementos). */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /*Cores e fontes usadas em todo o projeto*/
+  --bg: #0d0f12;
+  --surface: #13171e;
+  --border: #1f2630;
+  --accent: #00e5ff;
+  --accent-dim: #007a8a;
+  --danger: #ff4d4d;
+  --danger-dim: #8a1a1a;
+  --success: #00e096;
+  --warning: #ffb347;
+  --text: #cdd6e0;
+  --text-dim: #5a6a7a;
+  --mono: "Share Tech Mono", monospace;
+  --sans: "Barlow", sans-serif;
+}
+
+body {
+  /*centraliza tudo e aplica as cores */
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* efeito crt:
+   - repeating-linear-gradient: cria listras horizontais repetidas de 4px (2px transparente + 2px levemente escuro)
+   - pointer-events: none: garante que o overlay não bloqueie cliques
+   - z-index: 100: fica acima de todo o conteúdo visualmente, mas sem interferir */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.08) 2px,
+    rgba(0, 0, 0, 0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 100;
+}

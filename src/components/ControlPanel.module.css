@@ -1,0 +1,392 @@
+.wrapper {
+  width: min(820px, 96vw);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 0;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.title {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 400;
+  color: #fff;
+  letter-spacing: 0.08em;
+  margin: 4px 0 2px;
+}
+
+.subtitle {
+  font-size: 16px;
+  color: var(--text-dim);
+  font-weight: 300;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.connLabel {
+  font-family: var(--mono);
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.connStatus {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.refreshBtn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+
+.refreshBtn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* ── IP Bar ── */
+.ipBar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.monoText {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+}
+
+.ipValue {
+  font-family: var(--mono);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.ipHint {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: auto;
+  font-style: italic;
+}
+
+.statusBox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.statusLabel {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+}
+
+.statusValue {
+  font-family: var(--mono);
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: color 0.4s;
+}
+/* ponto que pisca indicando status */
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.dot_idle {
+  background: var(--text-dim);
+}
+.dot_active {
+  background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  animation: pulse 1s infinite;
+}
+.dot_warning {
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning);
+  animation: pulse 1s infinite;
+}
+.dot_success {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+}
+.dot_error {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+  animation: pulse 0.6s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* box do atuador */
+.actuatorViz {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.rail {
+  width: 48px;
+  height: 90px;
+  background: var(--border);
+  border-radius: 24px;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-bottom: 4px;
+  border: 1px solid #2a3545;
+}
+
+.hook {
+  font-size: 22px;
+  line-height: 1;
+  transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  transform: translateY(0);
+}
+
+.hookUp {
+  transform: translateY(-52px);
+}
+.hookDown {
+  transform: translateY(0);
+}
+
+.railLabel {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text-dim);
+  letter-spacing: 0.15em;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+}
+
+/*  botões */
+.btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 20px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.btn:not(:disabled):hover {
+  transform: translateY(-2px);
+}
+
+.btnIcon {
+  font-size: 20px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.btnSub {
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.08em;
+  font-family: var(--sans);
+  font-weight: 300;
+}
+
+.btnAcionar:not(:disabled):hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 229, 255, 0.15);
+}
+
+.btnParar {
+  background: #1a0a0a;
+  border-color: var(--danger-dim);
+  color: var(--danger);
+  padding: 20px 24px;
+}
+
+.btnParar:not(:disabled):hover {
+  border-color: var(--danger);
+  box-shadow: 0 0 20px rgba(255, 77, 77, 0.2);
+}
+
+.btnRecolher:not(:disabled):hover {
+  border-color: var(--warning);
+  color: var(--warning);
+  box-shadow: 0 0 20px rgba(255, 179, 71, 0.15);
+}
+
+.logBox {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.logHeader {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.logCount {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.logEntries {
+  padding: 12px 16px;
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.logEntry {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.logError {
+  color: var(--danger);
+}
+.logSuccess {
+  color: var(--success);
+}
+
+.logEmpty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+.telemetry {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.telemetryEmpty {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.5;
+}
+
+.telemetryGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.telemetryGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telemetryLabel {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+}
+
+.telemetryValue {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+}
