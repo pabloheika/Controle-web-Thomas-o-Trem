@@ -1,9 +1,9 @@
 .wrapper {
-  width: min(820px, 96vw);
+  width: 100%;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 24px 0;
+  padding-bottom: 16px;
 }
 
 .header {
@@ -86,8 +86,9 @@
   border-radius: 6px;
   padding: 10px 16px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   font-size: 12px;
 }
 
@@ -98,17 +99,74 @@
   letter-spacing: 0.1em;
 }
 
-.ipValue {
+.ipInput {
+  flex: 1;
+  min-width: 140px;
   font-family: var(--mono);
-  color: var(--accent);
   font-size: 13px;
+  color: var(--accent);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 6px 10px;
+  outline: none;
+}
+
+.ipInput:focus {
+  border-color: var(--accent);
+}
+
+.ipSaveBtn,
+.ipTestBtn {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  padding: 6px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.ipSaveBtn:hover,
+.ipTestBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.ipTestBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .ipHint {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-dim);
-  margin-left: auto;
+  width: 100%;
   font-style: italic;
+}
+
+.apiEndpoints {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  font-size: 11px;
+  padding: 0 4px;
+}
+
+.endpoint {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
 }
 
 .statusBox {
@@ -298,11 +356,44 @@
   box-shadow: 0 0 20px rgba(255, 179, 71, 0.15);
 }
 
+.telemetryHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.liveBadge {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.liveDotActive {
+  background: var(--success);
+  box-shadow: 0 0 6px var(--success);
+  animation: pulse 1.2s infinite;
+}
+
 .logBox {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow: clip;
+  max-height: min(420px, 50vh);
+  display: flex;
+  flex-direction: column;
 }
 
 .logHeader {
@@ -311,28 +402,146 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
-.logCount {
+.logSection {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.logSectionScrollable {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.logSection:last-child {
+  border-bottom: none;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.logSectionTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
   font-family: var(--mono);
-  font-size: 14px;
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.1em;
+}
+
+.logSectionHint {
+  font-size: 10px;
   color: var(--text-dim);
+  letter-spacing: 0.05em;
+}
+
+.liveBlock {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.liveBlockEmpty {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+
+.liveRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.liveKey {
+  color: var(--text-dim);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+}
+
+.liveHighlight {
+  color: var(--accent);
+}
+
+.liveSuccess {
+  color: var(--success);
+}
+
+.liveMono {
+  letter-spacing: 0.12em;
+}
+
+.logStream {
+  flex: 1;
+  min-height: 80px;
+  max-height: 140px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overscroll-behavior: contain;
+}
+
+.logStreamEntry {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1.45;
+  display: flex;
+  gap: 8px;
+  word-break: break-word;
+}
+
+.logStreamMsg {
+  color: var(--text);
+  flex: 1;
+}
+
+.logTime {
+  color: var(--text-dim);
+  flex-shrink: 0;
+  opacity: 0.85;
 }
 
 .logEntries {
-  padding: 12px 16px;
-  max-height: 150px;
+  flex: 1;
+  min-height: 60px;
+  max-height: 120px;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overscroll-behavior: contain;
 }
 
 .logEntry {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-dim);
   line-height: 1.5;
+  display: flex;
+  gap: 8px;
 }
 
 .logError {
