@@ -1,44 +1,65 @@
-/* remove margens e paddings padrão do navegador e define box-sizing como border-box (padding e border não aumentam o tamanho total dos elementos). */
-*,
-*::before,
-*::after {
+:root {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  /* Color Palette - Premium Dark/Neon */
+  --bg-dark: hsl(222, 47%, 11%);
+  --bg-panel: hsla(222, 47%, 15%, 0.7);
+  --bg-card: hsla(222, 47%, 18%, 0.8);
+  --bg-card-hover: hsla(222, 47%, 22%, 0.9);
+  
+  --text-main: hsl(210, 40%, 98%);
+  --text-dim: hsl(215, 20%, 65%);
+  --text-muted: hsl(215, 15%, 45%);
+
+  --accent: hsl(217, 91%, 60%);
+  --accent-glow: hsla(217, 91%, 60%, 0.3);
+  --accent-hover: hsl(217, 91%, 65%);
+  
+  --success: hsl(150, 80%, 45%);
+  --warning: hsl(35, 90%, 55%);
+  --danger: hsl(0, 80%, 60%);
+
+  /* Borders & Effects */
+  --border-light: hsla(210, 40%, 98%, 0.08);
+  --border-active: hsla(210, 40%, 98%, 0.2);
+  --shadow-sm: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  --shadow-glow: 0 0 15px var(--accent-glow);
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+
+  color: var(--text-main);
+  background-color: var(--bg-dark);
+  
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
 }
 
-:root {
-  /*Cores e fontes usadas em todo o projeto*/
-  --bg: #0d0f12;
-  --surface: #13171e;
-  --border: #1f2630;
-  --accent: #00e5ff;
-  --accent-dim: #007a8a;
-  --danger: #ff4d4d;
-  --danger-dim: #8a1a1a;
-  --success: #00e096;
-  --warning: #ffb347;
-  --text: #cdd6e0;
-  --text-dim: #5a6a7a;
-  --mono: "Share Tech Mono", monospace;
-  --sans: "Barlow", sans-serif;
-}
-
-html {
-  height: 100%;
-}
-
 body {
-  background-color: var(--bg);
-  color: var(--text);
-  font-family: var(--sans);
-  min-height: 100%;
+  margin: 0;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  background-color: var(--bg-dark);
+  background-image: 
+    radial-gradient(circle at 15% 50%, hsla(217, 91%, 60%, 0.04) 0%, transparent 50%),
+    radial-gradient(circle at 85% 30%, hsla(150, 80%, 45%, 0.03) 0%, transparent 50%);
+  color: var(--text-main);
+  padding: 24px 16px 48px;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 24px 16px 48px;
 }
 
 #root {
