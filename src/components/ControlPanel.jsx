@@ -1,673 +1,355 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import styles from "./ControlPanel.module.css";
 import {
   loadEspBaseUrl,
   saveEspBaseUrl,
   DEFAULT_ESP_BASE_URL,
-  isDevProxyEnabled,
-  getEspProxyTarget,
 } from "../config/esp32Config.js";
 import {
   buildEspApi,
   fetchTelemetry,
+  fetchLogs,
   sendCommand as postCommand,
   TELEMETRY_POLL_MS,
 } from "../services/esp32Api.js";
-import {
-  formatMpuTemp,
-  formatTelemetryLogLine,
-  formatUptime,
-} from "../utils/telemetryFormat.js";
-
-const MAX_EVENT_LOG = 40;
-const MAX_STREAM_LOG = 60;
-
-function createLogId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-const STATUS = {
-  IDLE: { label: "AGUARDANDO", color: "var(--text-dim)", dot: "idle" },
-  RISING: { label: "SUBINDO", color: "var(--accent)", dot: "active" },
-  LOWERING: { label: "DESCENDO", color: "var(--warning)", dot: "warning" },
-  STOPPED: { label: "PARADO", color: "var(--success)", dot: "success" },
-  ERROR: { label: "ERRO", color: "var(--danger)", dot: "error" },
-};
-
-function syncStatusFromTelemetry(data, setStatus) {
-  if (data.atuador === "subindo") setStatus("RISING");
-  else if (data.atuador === "descendo") setStatus("LOWERING");
-  else if (data.atuador === "parado") {
-    setStatus((prev) => (prev === "IDLE" ? "IDLE" : "STOPPED"));
-  }
-}
 
 function useESP32(espBaseUrl) {
-  const [status, setStatus] = useState("IDLE");
   const [loading, setLoading] = useState(false);
-  const [eventLog, setEventLog] = useState([]);
-  const [streamLog, setStreamLog] = useState([]);
   const [connected, setConnected] = useState(null);
   const [telemetry, setTelemetry] = useState(null);
-  const [lastUpdated, setLastUpdated] = useState(null);
+  const [logs, setLogs] = useState([]);
+  
+  const api = useMemo(() => buildEspApi(espBaseUrl), [espBaseUrl]);
 
-  const api = buildEspApi(espBaseUrl);
+  const fetchSysLogs = useCallback(async () => {
+    try {
+      const data = await fetchLogs(api);
+      if (data && data.logs) {
+        setLogs(data.logs);
+      }
+    } catch (err) {
+      // Ignora erro sutil para não floodar a UI se falhar apenas o log
+    }
+  }, [api]);
 
-  const addEvent = useCallback((msg, level = "info") => {
-    const time = new Date().toLocaleTimeString("pt-BR");
-    setEventLog((prev) =>
-      [
-        { id: createLogId(), time, type: "event", level, message: msg },
-        ...prev,
-      ].slice(0, MAX_EVENT_LOG),
-    );
-  }, []);
-
-  const pushStreamEntry = useCallback((data) => {
-    const time = new Date().toLocaleTimeString("pt-BR");
-    setStreamLog((prev) =>
-      [
-        {
-          id: createLogId(),
-          time,
-          type: "telemetry",
-          message: formatTelemetryLogLine(data),
-          data,
-        },
-        ...prev,
-      ].slice(0, MAX_STREAM_LOG),
-    );
-  }, []);
-
-  const applyTelemetry = useCallback(
-    (data, { silent = false, logStream = true } = {}) => {
+  const fetchTelemetryData = useCallback(async () => {
+    try {
+      const data = await fetchTelemetry(api);
       setTelemetry(data);
       setConnected(true);
-      setLastUpdated(new Date());
-      syncStatusFromTelemetry(data, setStatus);
-      if (logStream) pushStreamEntry(data);
-      if (!silent) addEvent("Telemetria recebida", "success");
-    },
-    [addEvent, pushStreamEntry],
-  );
-
-  const applyTelemetryError = useCallback(
-    (err, silent) => {
-      setConnected(false);
-      setTelemetry(null);
-      setLastUpdated(null);
-      if (!silent)
-        addEvent(`Falha ao obter telemetria: ${err.message}`, "error");
-    },
-    [addEvent],
-  );
-
-  const fetchTelemetryData = useCallback(
-    async (silent = false) => {
-      try {
-        const data = await fetchTelemetry(api);
-        applyTelemetry(data, { silent, logStream: true });
-      } catch (err) {
-        applyTelemetryError(err, silent);
-      }
-    },
-    [api, applyTelemetry, applyTelemetryError],
-  );
-
-  const sendCommand = useCallback(
-    async (cmd, nextStatus, logMsg) => {
-      if (loading) return;
-      setLoading(true);
-      setStatus(nextStatus);
-      addEvent(logMsg);
-      try {
-        const data = await postCommand(api, cmd);
-        addEvent(`ESP32 respondeu: ${JSON.stringify(data)}`, "success");
-        setConnected(true);
-        await fetchTelemetryData(true);
-      } catch (err) {
-        setStatus("ERROR");
-        setConnected(false);
-        addEvent(`Falha na comunicação: ${err.message}`, "error");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [api, loading, addEvent, fetchTelemetryData],
-  );
-
-  const testConnection = useCallback(async () => {
-    setLoading(true);
-    addEvent("Testando conexão (noop)...");
-    try {
-      const data = await postCommand(api, "noop");
-      addEvent(`Conexão OK: ${JSON.stringify(data)}`, "success");
-      setConnected(true);
-      await fetchTelemetryData(true);
     } catch (err) {
       setConnected(false);
-      setTelemetry(null);
-      setLastUpdated(null);
-      addEvent(`Teste falhou: ${err.message}`, "error");
+    }
+  }, [api]);
+
+  const sendCommand = useCallback(async (cmd, payload = null) => {
+    if (loading) return;
+    setLoading(true);
+    try {
+      await postCommand(api, cmd, payload);
+      setConnected(true);
+      await fetchTelemetryData();
+    } catch (err) {
+      setConnected(false);
     } finally {
       setLoading(false);
     }
-  }, [api, addEvent, fetchTelemetryData]);
-
-  const acionar = useCallback(
-    () =>
-      sendCommand("acionar", "RISING", "Acionando atuador — gancho subindo..."),
-    [sendCommand],
-  );
-  const recolher = useCallback(
-    () =>
-      sendCommand(
-        "recolher",
-        "LOWERING",
-        "Recolhendo atuador — gancho descendo...",
-      ),
-    [sendCommand],
-  );
-  const parar = useCallback(
-    () => sendCommand("parar", "STOPPED", "Comando de parada enviado"),
-    [sendCommand],
-  );
+  }, [api, loading, fetchTelemetryData]);
 
   useEffect(() => {
     let cancelled = false;
-
-    (async () => {
-      try {
-        const data = await fetchTelemetry(api);
-        if (cancelled) return;
-        applyTelemetry(data, { silent: true, logStream: true });
-      } catch (err) {
-        if (cancelled) return;
-        applyTelemetryError(err, true);
-      }
-    })();
-
     const interval = setInterval(() => {
-      fetchTelemetryData(true);
+      if (!cancelled) {
+        fetchTelemetryData();
+        fetchSysLogs();
+      }
     }, TELEMETRY_POLL_MS);
+    
+    fetchTelemetryData();
+    fetchSysLogs();
 
     return () => {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [
-    espBaseUrl,
-    api,
-    applyTelemetry,
-    applyTelemetryError,
-    fetchTelemetryData,
-  ]);
+  }, [fetchTelemetryData, fetchSysLogs]);
 
   return {
-    status,
     loading,
-    eventLog,
-    streamLog,
     connected,
     telemetry,
-    lastUpdated,
+    logs,
     espBaseUrl: api.storedBaseUrl,
-    fetchBaseUrl: api.baseUrl,
-    acionar,
-    recolher,
-    parar,
-    testConnection,
-    fetchTelemetry: fetchTelemetryData,
+    sendCommand,
   };
-}
-
-function StatusDot({ type }) {
-  return <span className={`${styles.dot} ${styles[`dot_${type}`]}`} />;
-}
-
-function EspConfigBar({ baseUrl, fetchBaseUrl, onSave, onTest, testing }) {
-  const [input, setInput] = useState(baseUrl);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = (e) => {
-    e.preventDefault();
-    onSave(input);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
-  return (
-    <form className={styles.ipBar} onSubmit={handleSave}>
-      <span className={styles.monoText}>ESP32 →</span>
-      <input
-        className={styles.ipInput}
-        type="text"
-        value={input}
-        onChange={(e) => setInput(e.target.value)}
-        placeholder={DEFAULT_ESP_BASE_URL}
-        spellCheck={false}
-        aria-label="Endereço da ESP32"
-      />
-      <button type="submit" className={styles.ipSaveBtn}>
-        {saved ? "Salvo" : "Conectar"}
-      </button>
-      <button
-        type="button"
-        className={styles.ipTestBtn}
-        onClick={onTest}
-        disabled={testing}
-      >
-        Testar
-      </button>
-      <span className={styles.ipHint}>
-        {isDevProxyEnabled() && fetchBaseUrl === "/esp"
-          ? `Dev: requisições via ${fetchBaseUrl} → ${getEspProxyTarget()} (reinicie npm run dev se mudar o IP)`
-          : "IP do monitor serial · GET /api/telemetry"}
-      </span>
-    </form>
-  );
-}
-
-function LiveBadge({ connected, lastUpdated }) {
-  const live = connected && lastUpdated;
-  const timeStr = lastUpdated?.toLocaleTimeString("pt-BR") ?? "—";
-
-  return (
-    <span className={styles.liveBadge}>
-      <span
-        className={`${styles.liveDot} ${live ? styles.liveDotActive : ""}`}
-      />
-      {connected === null
-        ? "sincronizando..."
-        : connected
-          ? `ao vivo · ${timeStr}`
-          : "offline"}
-    </span>
-  );
-}
-
-function LiveTelemetryBlock({ data, connected }) {
-  if (!data || !connected) {
-    return (
-      <div className={styles.liveBlock}>
-        <span className={styles.liveBlockEmpty}>
-          {connected === false
-            ? "ESP offline — aguardando conexão..."
-            : "Aguardando primeira leitura..."}
-        </span>
-      </div>
-    );
-  }
-
-  const mask = data.qtr8rc
-    ? Number(data.qtr8rc.black_mask).toString(2).padStart(8, "0")
-    : null;
-
-  return (
-    <div className={styles.liveBlock}>
-      <div className={styles.liveRow}>
-        <span className={styles.liveKey}>UPTIME</span>
-        <span>{formatUptime(data.uptime_ms)}</span>
-        <span className={styles.liveKey}>RSSI</span>
-        <span>{data.wifi_rssi ?? "—"} dBm</span>
-        <span className={styles.liveKey}>ATUADOR</span>
-        <span className={styles.liveHighlight}>{data.atuador ?? "—"}</span>
-      </div>
-      {data.mpu6050 && (
-        <div className={styles.liveRow}>
-          <span className={styles.liveKey}>ACCEL</span>
-          <span>
-            {data.mpu6050.accel_x} / {data.mpu6050.accel_y} /{" "}
-            {data.mpu6050.accel_z}
-          </span>
-          <span className={styles.liveKey}>GYRO</span>
-          <span>
-            {data.mpu6050.gyro_x} / {data.mpu6050.gyro_y} /{" "}
-            {data.mpu6050.gyro_z}
-          </span>
-          <span className={styles.liveKey}>TEMP</span>
-          <span>{formatMpuTemp(data.mpu6050.temp)}</span>
-        </div>
-      )}
-      {data.qtr8rc && (
-        <div className={styles.liveRow}>
-          <span className={styles.liveKey}>LINHA</span>
-          <span
-            className={
-              data.qtr8rc.line_detected ? styles.liveSuccess : undefined
-            }
-          >
-            {data.qtr8rc.line_detected ? "SIM" : "NÃO"}
-          </span>
-          <span className={styles.liveKey}>MASK</span>
-          <span className={styles.liveMono}>{mask}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SystemLogPanel({
-  telemetry,
-  connected,
-  lastUpdated,
-  eventLog,
-  streamLog,
-}) {
-  const streamRef = useRef(null);
-
-  useEffect(() => {
-    if (streamRef.current) {
-      streamRef.current.scrollTop = 0;
-    }
-  }, [streamLog]);
-
-  return (
-    <div className={styles.logBox}>
-      <div className={styles.logHeader}>
-        <span className={styles.monoText}>LOG DO SISTEMA</span>
-        <LiveBadge connected={connected} lastUpdated={lastUpdated} />
-      </div>
-
-      <div className={styles.logSection}>
-        <div className={styles.logSectionTitle}>
-          <span>ESP — AO VIVO</span>
-          <span className={styles.logSectionHint}>
-            atualiza a cada {TELEMETRY_POLL_MS / 1000}s
-          </span>
-        </div>
-        <LiveTelemetryBlock data={telemetry} connected={connected} />
-      </div>
-
-      <div className={styles.logSection}>
-        <div className={styles.logSectionTitle}>
-          <span>HISTÓRICO DE LEITURAS</span>
-          <span className={styles.logSectionHint}>
-            {streamLog.length} amostras
-          </span>
-        </div>
-        <div className={styles.logStream} ref={streamRef}>
-          {streamLog.length === 0 ? (
-            <span className={styles.logEmpty}>— aguardando telemetria —</span>
-          ) : (
-            streamLog.map((entry) => (
-              <div key={entry.id} className={styles.logStreamEntry}>
-                <span className={styles.logTime}>{entry.time}</span>
-                <span className={styles.logStreamMsg}>{entry.message}</span>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      <div className={styles.logSection}>
-        <div className={styles.logSectionTitle}>
-          <span>EVENTOS</span>
-          <span className={styles.logSectionHint}>
-            {eventLog.length} entradas
-          </span>
-        </div>
-        <div className={styles.logEntries}>
-          {eventLog.length === 0 ? (
-            <span className={styles.logEmpty}>— sem eventos —</span>
-          ) : (
-            eventLog.map((entry) => (
-              <div
-                key={entry.id}
-                className={`${styles.logEntry} ${
-                  entry.level === "error"
-                    ? styles.logError
-                    : entry.level === "success"
-                      ? styles.logSuccess
-                      : ""
-                }`}
-              >
-                <span className={styles.logTime}>{entry.time}</span>
-                {entry.message}
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function TelemetryPanel({ data, connected, lastUpdated }) {
-  if (!data) {
-    return (
-      <div className={styles.telemetry}>
-        <div className={styles.telemetryHeader}>
-          <span className={styles.monoText}>TELEMETRIA</span>
-          <LiveBadge connected={connected} lastUpdated={lastUpdated} />
-        </div>
-        <span className={styles.telemetryEmpty}>— sem dados —</span>
-      </div>
-    );
-  }
-
-  const uptime = formatUptime(data.uptime_ms);
-  const tempC = formatMpuTemp(data.mpu6050?.temp);
-
-  return (
-    <div className={styles.telemetry}>
-      <div className={styles.telemetryHeader}>
-        <span className={styles.monoText}>TELEMETRIA</span>
-        <LiveBadge connected={connected} lastUpdated={lastUpdated} />
-      </div>
-      <div className={styles.telemetryGrid}>
-        <div className={styles.telemetryGroup}>
-          <span className={styles.telemetryLabel}>UPTIME</span>
-          <span className={styles.telemetryValue}>{uptime}</span>
-        </div>
-        <div className={styles.telemetryGroup}>
-          <span className={styles.telemetryLabel}>Wi-Fi RSSI</span>
-          <span className={styles.telemetryValue}>
-            {data.wifi_rssi != null ? `${data.wifi_rssi} dBm` : "—"}
-          </span>
-        </div>
-        <div className={styles.telemetryGroup}>
-          <span className={styles.telemetryLabel}>ATUADOR</span>
-          <span className={styles.telemetryValue}>{data.atuador ?? "—"}</span>
-        </div>
-
-        {data.mpu6050 && (
-          <>
-            <div className={styles.telemetryGroup}>
-              <span className={styles.telemetryLabel}>ACCEL X/Y/Z</span>
-              <span className={styles.telemetryValue}>
-                {data.mpu6050.accel_x} / {data.mpu6050.accel_y} /{" "}
-                {data.mpu6050.accel_z}
-              </span>
-            </div>
-            <div className={styles.telemetryGroup}>
-              <span className={styles.telemetryLabel}>GYRO X/Y/Z</span>
-              <span className={styles.telemetryValue}>
-                {data.mpu6050.gyro_x} / {data.mpu6050.gyro_y} /{" "}
-                {data.mpu6050.gyro_z}
-              </span>
-            </div>
-            <div className={styles.telemetryGroup}>
-              <span className={styles.telemetryLabel}>TEMP MPU6050</span>
-              <span className={styles.telemetryValue}>{tempC}</span>
-            </div>
-          </>
-        )}
-
-        {data.qtr8rc && (
-          <>
-            <div className={styles.telemetryGroup}>
-              <span className={styles.telemetryLabel}>LINHA DETECTADA</span>
-              <span
-                className={styles.telemetryValue}
-                style={{
-                  color: data.qtr8rc.line_detected
-                    ? "var(--success)"
-                    : "var(--text-dim)",
-                }}
-              >
-                {data.qtr8rc.line_detected ? "SIM" : "NÃO"}
-              </span>
-            </div>
-            <div className={styles.telemetryGroup}>
-              <span className={styles.telemetryLabel}>MÁSCARA PRETO</span>
-              <span className={styles.telemetryValue}>
-                {Number(data.qtr8rc.black_mask).toString(2).padStart(8, "0")}
-              </span>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
 }
 
 export default function ControlPanel() {
   const [espBaseUrl, setEspBaseUrl] = useState(loadEspBaseUrl);
   const {
-    status,
     loading,
-    eventLog,
-    streamLog,
     connected,
     telemetry,
-    lastUpdated,
-    espBaseUrl: activeUrl,
-    fetchBaseUrl,
-    acionar,
-    recolher,
-    parar,
-    testConnection,
-    fetchTelemetry,
+    logs,
+    sendCommand,
   } = useESP32(espBaseUrl);
 
-  const current = STATUS[status];
+  // Form states
+  const [kp, setKp] = useState(0.2);
+  const [ki, setKi] = useState(0.0);
+  const [kd, setKd] = useState(1.0);
+  const [baseSpeed, setBaseSpeed] = useState(150);
 
-  const handleSaveEspUrl = (url) => {
+  // Manual motor states
+  const [leftMotor, setLeftMotor] = useState(0);
+  const [rightMotor, setRightMotor] = useState(0);
+
+  const mode = telemetry?.mode || "idle";
+
+  const handleSaveEspUrl = (e) => {
+    e.preventDefault();
+    const url = new FormData(e.target).get("url");
     setEspBaseUrl(saveEspBaseUrl(url));
   };
 
+  const handleSetMode = (newMode) => {
+    sendCommand("set_mode", { mode: newMode });
+  };
+
+  const handlePidSubmit = (e) => {
+    e.preventDefault();
+    sendCommand("set_pid", { kp: parseFloat(kp), ki: parseFloat(ki), kd: parseFloat(kd) });
+    sendCommand("set_speed", { speed: parseInt(baseSpeed, 10) });
+  };
+
+  // Debounced manual move
+  const lastMoveRef = useRef(0);
+  const sendManualMove = (l, r) => {
+    const now = Date.now();
+    if (now - lastMoveRef.current > 100) {
+      sendCommand("manual_move", { left: l, right: r });
+      lastMoveRef.current = now;
+    }
+  };
+
+  const handleLeftMotor = (e) => {
+    const val = parseInt(e.target.value, 10);
+    setLeftMotor(val);
+    sendManualMove(val, rightMotor);
+  };
+
+  const handleRightMotor = (e) => {
+    const val = parseInt(e.target.value, 10);
+    setRightMotor(val);
+    sendManualMove(leftMotor, val);
+  };
+  
+  const handleStopManual = () => {
+    setLeftMotor(0);
+    setRightMotor(0);
+    sendCommand("manual_move", { left: 0, right: 0 });
+  };
+
+  // Auto-scroll logs
+  const terminalRef = useRef(null);
+  useEffect(() => {
+    if (terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }
+  }, [logs]);
+
   return (
     <div className={styles.wrapper}>
+      {/* HEADER */}
       <header className={styles.header}>
-        <div className={styles.headerLeft}>
-          <span className={styles.tag}>PI2 • GRUPO 01</span>
-          <h1 className={styles.title}>CONTROLE DO ATUADOR</h1>
-          <p className={styles.subtitle}>
-            SISTEMA DE ELEVAÇÃO DO ATUADOR LINEAR (GANCHO) - CARRINHO AUTÔNOMO
-            THOMAS
-          </p>
+        <div>
+          <h1 className={styles.title}>THOMAS, O TREM</h1>
+          <p className={styles.subtitle}>Dashboard de Controle Autônomo</p>
         </div>
-        <div className={styles.headerRight}>
-          <span className={styles.connLabel}>ESP32</span>
-          <StatusDot
-            type={connected === null ? "idle" : connected ? "success" : "error"}
-          />
-          <span className={styles.connStatus}>
-            {connected === null
-              ? "verificando..."
-              : connected
-                ? "online"
-                : "offline"}
+        
+        <div className={styles.connBox}>
+          <span className={connected ? styles.dotSuccess : styles.dotError} className={styles.dot}></span>
+          <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
+            {connected === null ? "Conectando..." : connected ? "Online" : "Offline"}
           </span>
-          <button
-            className={styles.refreshBtn}
-            onClick={() => fetchTelemetry()}
-            title="Atualizar telemetria"
-          >
-            ↻
-          </button>
+          <form className={styles.ipForm} onSubmit={handleSaveEspUrl}>
+            <input 
+              name="url"
+              className={styles.ipInput} 
+              defaultValue={espBaseUrl}
+              placeholder={DEFAULT_ESP_BASE_URL}
+            />
+            <button className={styles.btnSm} type="submit">Conectar</button>
+          </form>
         </div>
       </header>
 
-      <EspConfigBar
-        key={espBaseUrl}
-        baseUrl={espBaseUrl}
-        fetchBaseUrl={fetchBaseUrl}
-        onSave={handleSaveEspUrl}
-        onTest={testConnection}
-        testing={loading}
-      />
-
-      <div className={styles.apiEndpoints}>
-        <span className={styles.monoText}>API</span>
-        <code className={styles.endpoint}>{fetchBaseUrl}/api/telemetry</code>
-        <code className={styles.endpoint}>{fetchBaseUrl}/api/command</code>
-        {fetchBaseUrl !== activeUrl && (
-          <span className={styles.ipHint}>→ ESP em {activeUrl}</span>
-        )}
-      </div>
-
-      <div className={styles.statusBox}>
-        <span className={styles.statusLabel}>STATUS DO SISTEMA</span>
-        <div className={styles.statusValue} style={{ color: current.color }}>
-          <StatusDot type={current.dot} />
-          {current.label}
-        </div>
-      </div>
-
-      <div className={styles.actuatorViz}>
-        <div className={styles.rail}>
-          <div
-            className={`${styles.hook} ${
-              status === "RISING"
-                ? styles.hookUp
-                : status === "LOWERING"
-                  ? styles.hookDown
-                  : ""
-            }`}
-          >
-            🪝
+      <div className={styles.dashboardGrid}>
+        
+        {/* COLUNA ESQUERDA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* MODES PANEL */}
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Modo de Operação</div>
+            <div className={styles.modeGrid}>
+              <button 
+                className={`${styles.modeBtn} ${mode === "idle" ? styles.modeBtnActive : ""}`}
+                onClick={() => handleSetMode("idle")}
+              >
+                IDLE
+                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Parado</span>
+              </button>
+              <button 
+                className={`${styles.modeBtn} ${mode === "auto" ? styles.modeBtnActive : ""}`}
+                onClick={() => handleSetMode("auto")}
+              >
+                AUTO
+                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Seguir Linha</span>
+              </button>
+              <button 
+                className={`${styles.modeBtn} ${mode === "manual" ? styles.modeBtnActive : ""}`}
+                onClick={() => handleSetMode("manual")}
+              >
+                MANUAL
+                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Controle Remoto</span>
+              </button>
+              <button 
+                className={`${styles.modeBtn} ${mode === "calibrate" ? styles.modeBtnActive : ""}`}
+                onClick={() => handleSetMode("calibrate")}
+              >
+                CALIBRAR
+                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Girar Sensores</span>
+              </button>
+            </div>
           </div>
+
+          {/* TELEMETRIA QTR */}
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Visão do Sensor (QTR-8RC)</div>
+            <div className={styles.lineContainer}>
+              {[0,1,2,3,4,5,6,7].map(i => {
+                const mask = telemetry?.qtr8rc?.black_mask || 0;
+                const isBlack = (mask & (1 << i)) !== 0;
+                return <div key={i} className={`${styles.sensorDot} ${isBlack ? styles.black : ""}`}></div>;
+              })}
+            </div>
+            {telemetry?.qtr8rc && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+                <span>Linha: {telemetry.qtr8rc.line_detected ? "SIM" : "NÃO"}</span>
+                <span>Erro PID: {telemetry.pid?.error?.toFixed(1) || "0.0"}</span>
+                <span>Correção: {telemetry.pid?.correction?.toFixed(1) || "0.0"}</span>
+              </div>
+            )}
+          </div>
+
+          {/* CONTROLE MANUAL */}
+          <div className={styles.card} style={{ opacity: mode === "manual" ? 1 : 0.5 }}>
+            <div className={styles.cardTitle}>
+              Controle Manual dos Motores
+              {mode !== "manual" && <span style={{fontSize: '0.7rem'}}>(Requer modo MANUAL)</span>}
+            </div>
+            
+            <div className={styles.sliderGroup}>
+              <div className={styles.sliderRow}>
+                <span className={styles.sliderLabel}>ESQ</span>
+                <input 
+                  type="range" min="-255" max="255" 
+                  value={leftMotor} onChange={handleLeftMotor}
+                  className={styles.slider}
+                  disabled={mode !== "manual"}
+                />
+                <span className={styles.sliderVal}>{leftMotor}</span>
+              </div>
+              <div className={styles.sliderRow}>
+                <span className={styles.sliderLabel}>DIR</span>
+                <input 
+                  type="range" min="-255" max="255" 
+                  value={rightMotor} onChange={handleRightMotor}
+                  className={styles.slider}
+                  disabled={mode !== "manual"}
+                />
+                <span className={styles.sliderVal}>{rightMotor}</span>
+              </div>
+              <button 
+                className={styles.btnSm} 
+                style={{ marginTop: '8px' }} 
+                onClick={handleStopManual}
+                disabled={mode !== "manual"}
+              >
+                Parar Rotação
+              </button>
+            </div>
+          </div>
+          
         </div>
-        <div className={styles.railLabel}>ATUADOR LINEAR</div>
+
+        {/* COLUNA DIREITA */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          
+          {/* PID TUNING */}
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>Ajuste de PID e Velocidade Base</div>
+            <form onSubmit={handlePidSubmit}>
+              <div className={styles.formRow}>
+                <div className={styles.inputGroup}>
+                  <label>Kp</label>
+                  <input type="number" step="0.01" value={kp} onChange={e => setKp(e.target.value)} />
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>Ki</label>
+                  <input type="number" step="0.01" value={ki} onChange={e => setKi(e.target.value)} />
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>Kd</label>
+                  <input type="number" step="0.01" value={kd} onChange={e => setKd(e.target.value)} />
+                </div>
+              </div>
+              <div className={styles.formRow} style={{ marginTop: '12px' }}>
+                <div className={styles.inputGroup}>
+                  <label>Velocidade Base (0-255)</label>
+                  <input type="number" step="1" min="0" max="255" value={baseSpeed} onChange={e => setBaseSpeed(e.target.value)} />
+                </div>
+                <button type="submit" className={styles.btnPrimary} style={{ padding: '8px 16px', flex: '0 0 auto' }}>
+                  Aplicar Ganhos
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* ACTUATOR */}
+          <div className={styles.card}>
+            <div className={styles.cardTitle}>
+              Atuador Linear (Gancho)
+              <span style={{ color: 'var(--accent)'}}>{telemetry?.atuador || "parado"}</span>
+            </div>
+            <div className={styles.actuatorRow}>
+              <button className={styles.btnPrimary} onClick={() => sendCommand("acionar")}>▲ Subir</button>
+              <button className={styles.btnPrimary} onClick={() => sendCommand("recolher")}>▼ Baixar</button>
+              <button className={styles.btnDanger} onClick={() => sendCommand("parar")}>■ Parar</button>
+            </div>
+          </div>
+
+          {/* TERMINAL LOGS */}
+          <div className={styles.card} style={{ flex: 1 }}>
+            <div className={styles.cardTitle}>Logs do Sistema (Ao Vivo)</div>
+            <div className={styles.terminal} ref={terminalRef}>
+              {logs.length === 0 ? (
+                <span style={{color: 'var(--text-muted)'}}>Nenhum log recebido...</span>
+              ) : (
+                logs.map((l, idx) => (
+                  <div key={`${l.ts}-${idx}`} className={styles.logLine}>
+                    <span className={styles.logTime}>{l.ts}</span>
+                    <span className={styles.logTag}>[{l.tag}]</span>
+                    <span className={styles[`log${l.level}`]}>{l.msg}</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+        </div>
       </div>
-
-      <div className={styles.controls}>
-        <button
-          className={`${styles.btn} ${styles.btnAcionar}`}
-          onClick={acionar}
-          disabled={loading || status === "RISING"}
-        >
-          <span className={styles.btnIcon}>▲</span>
-          ACIONAR
-          <span className={styles.btnSub}>elevar gancho</span>
-        </button>
-
-        <button
-          className={`${styles.btn} ${styles.btnParar}`}
-          onClick={parar}
-          disabled={loading || status === "IDLE" || status === "STOPPED"}
-        >
-          <span className={styles.btnIcon}>■</span>
-          PARAR
-          <span className={styles.btnSub}>parada imediata</span>
-        </button>
-
-        <button
-          className={`${styles.btn} ${styles.btnRecolher}`}
-          onClick={recolher}
-          disabled={loading || status === "LOWERING"}
-        >
-          <span className={styles.btnIcon}>▼</span>
-          RECOLHER
-          <span className={styles.btnSub}>baixar gancho</span>
-        </button>
-      </div>
-
-      <TelemetryPanel
-        data={telemetry}
-        connected={connected}
-        lastUpdated={lastUpdated}
-      />
-
-      <SystemLogPanel
-        telemetry={telemetry}
-        connected={connected}
-        lastUpdated={lastUpdated}
-        eventLog={eventLog}
-        streamLog={streamLog}
-      />
     </div>
   );
 }
