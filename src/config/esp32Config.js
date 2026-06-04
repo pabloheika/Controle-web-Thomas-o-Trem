@@ -61,7 +61,7 @@ export function normalizeEspBaseUrl(input) {
 
 export function resolveFetchBaseUrl(storedUrl) {
   const normalized = normalizeEspBaseUrl(storedUrl);
-  if (isDevProxyEnabled() && normalized && isPrivateNetworkUrl(normalized)) {
+  if (isDevProxyEnabled() && normalized === getEspTargetUrl()) {
     return DEV_PROXY_PREFIX;
   }
   return normalized;
