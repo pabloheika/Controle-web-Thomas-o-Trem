@@ -200,17 +200,42 @@
   border: 1px solid var(--border-light);
 }
 .sensorDot {
-  width: 24px;
-  height: 24px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
   border: 2px solid var(--border-active);
-  transition: all 0.1s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: white;
 }
 .sensorDot.black {
   background: #111;
   border-color: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
+  box-shadow: 0 0 12px var(--accent-glow);
+}
+
+/* Sensor Grid for 3 E18-D80NK sensors */
+.sensorGrid {
+  display: flex;
+  gap: 32px;
+  justify-content: center;
+  align-items: center;
+  padding: 24px 0;
+  background: var(--bg-dark);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+.sensorItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+.sensorLabel2 {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 /* Form Groups (PID/Speed) */

@@ -219,24 +219,31 @@ export default function ControlPanel() {
                 onClick={() => handleSetMode("calibrate")}
               >
                 CALIBRAR
-                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Girar Sensores</span>
+                <span style={{fontSize: '0.7rem', fontWeight: 'normal'}}>Não Necessário</span>
               </button>
             </div>
           </div>
 
-          {/* TELEMETRIA QTR */}
+          {/* TELEMETRIA IR */}
           <div className={styles.card}>
-            <div className={styles.cardTitle}>Visão do Sensor (QTR-8RC)</div>
+            <div className={styles.cardTitle}>Sensores IR (E18-D80NK)</div>
             <div className={styles.lineContainer}>
-              {[0,1,2,3,4,5,6,7].map(i => {
-                const mask = telemetry?.qtr8rc?.black_mask || 0;
-                const isBlack = (mask & (1 << i)) !== 0;
-                return <div key={i} className={`${styles.sensorDot} ${isBlack ? styles.black : ""}`}></div>;
-              })}
+              <div className={styles.sensorGrid}>
+                {['ESQ', 'CENTRO', 'DIR'].map((label, i) => {
+                  const keys = ['left', 'center', 'right'];
+                  const isBlack = telemetry?.ir_sensors?.[keys[i]] || false;
+                  return (
+                    <div key={i} className={styles.sensorItem}>
+                      <div className={`${styles.sensorDot} ${isBlack ? styles.black : ""}`}></div>
+                      <span className={styles.sensorLabel2}>{label}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-            {telemetry?.qtr8rc && (
+            {telemetry?.ir_sensors && (
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
-                <span>Linha: {telemetry.qtr8rc.line_detected ? "SIM" : "NÃO"}</span>
+                <span>Linha: {telemetry.ir_sensors.line_detected ? "SIM" : "NÃO"}</span>
                 <span>Erro PID: {telemetry.pid?.error?.toFixed(1) || "0.0"}</span>
                 <span>Correção: {telemetry.pid?.correction?.toFixed(1) || "0.0"}</span>
               </div>
