@@ -1,0 +1,18 @@
+image: node:20-alpine
+
+stages:
+  - deploy
+
+pages:
+  stage: deploy
+  script:
+    - npm install
+    - npm run build
+    # O GitLab Pages requer que os arquivos estáticos fiquem na pasta "public"
+    - rm -rf public
+    - mv dist public
+  artifacts:
+    paths:
+      - public
+  rules:
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
