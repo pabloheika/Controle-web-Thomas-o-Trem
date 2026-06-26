@@ -84,6 +84,128 @@ function useESP32(espBaseUrl) {
   };
 }
 
+/* ============ Compute motors from joystick position ============ */
+function computeMotorsFromXY(x, y, radius) {
+  if (radius <= 0) return { left: 0, right: 0 };
+  // Y-axis = throttle (up = forward), X-axis = steering
+  const throttle = -y / radius; // -1 (back) to 1 (forward)
+  const steering = x / radius;  // -1 (left) to 1 (right)
+  let left = throttle + steering;
+  let right = throttle - steering;
+  // Normalize to -1..1
+  const maxVal = Math.max(Math.abs(left), Math.abs(right), 1);
+  left = left / maxVal;
+  right = right / maxVal;
+  // Scale to -255..255
+  return {
+    left: Math.round(left * 255),
+    right: Math.round(right * 255),
+  };
+}
+
+/* ============ VIRTUAL JOYSTICK ============ */
+function VirtualJoystick({ disabled, onMove, onRelease }) {
+  const zoneRef = useRef(null);
+  const [pos, setPos] = useState({ x: 0, y: 0 });
+  const [active, setActive] = useState(false);
+  const activePointer = useRef(null);
+
+  const clampToCircle = (dx, dy, radius) => {
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist <= radius) return { x: dx, y: dy };
+    return { x: (dx / dist) * radius, y: (dy / dist) * radius };
+  };
+
+  const getRelativePos = (clientX, clientY) => {
+    const rect = zoneRef.current.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const radius = rect.width / 2 - 25; // knob radius offset
+    const dx = clientX - centerX;
+    const dy = clientY - centerY;
+    return clampToCircle(dx, dy, radius);
+  };
+
+  const getRadius = () => {
+    if (!zoneRef.current) return 75;
+    const rect = zoneRef.current.getBoundingClientRect();
+    return rect.width / 2 - 25;
+  };
+
+  const handlePointerDown = (e) => {
+    if (disabled) return;
+    if (activePointer.current !== null) return;
+    activePointer.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setActive(true);
+    const p = getRelativePos(e.clientX, e.clientY);
+    setPos(p);
+    const radius = getRadius();
+    const motors = computeMotorsFromXY(p.x, p.y, radius);
+    onMove(motors.left, motors.right);
+  };
+
+  const handlePointerMove = (e) => {
+    if (activePointer.current !== e.pointerId) return;
+    const p = getRelativePos(e.clientX, e.clientY);
+    setPos(p);
+    const radius = getRadius();
+    const motors = computeMotorsFromXY(p.x, p.y, radius);
+    onMove(motors.left, motors.right);
+  };
+
+  const handlePointerUp = (e) => {
+    if (activePointer.current !== e.pointerId) return;
+    activePointer.current = null;
+    setActive(false);
+    setPos({ x: 0, y: 0 });
+    onRelease();
+  };
+
+  const radius = getRadius();
+  const displayMotors = computeMotorsFromXY(pos.x, pos.y, radius);
+
+  return (
+    <div className={styles.joystickContainer}>
+      <div className={styles.joystickLabels}>
+        <span>← Esq</span>
+        <span>Frente ↑</span>
+        <span>Dir →</span>
+      </div>
+      <div
+        ref={zoneRef}
+        className={`${styles.joystickZone} ${disabled ? styles.joystickDisabled : ''}`}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+      >
+        <div
+          className={`${styles.joystickKnob} ${active ? styles.joystickKnobActive : ''}`}
+          style={{
+            left: `calc(50% + ${pos.x}px)`,
+            top: `calc(50% + ${pos.y}px)`,
+          }}
+        />
+      </div>
+      <div className={styles.joystickValues}>
+        <div className={styles.joystickVal}>
+          <span className={styles.joystickValLabel}>Esq</span>
+          <span className={styles.joystickValNum}>
+            {disabled ? '—' : displayMotors.left}
+          </span>
+        </div>
+        <div className={styles.joystickVal}>
+          <span className={styles.joystickValLabel}>Dir</span>
+          <span className={styles.joystickValNum}>
+            {disabled ? '—' : displayMotors.right}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ControlPanel() {
   const [espBaseUrl, setEspBaseUrl] = useState(loadEspBaseUrl);
   const {
@@ -99,10 +221,14 @@ export default function ControlPanel() {
   const [ki, setKi] = useState(0.0);
   const [kd, setKd] = useState(1.0);
   const [baseSpeed, setBaseSpeed] = useState(150);
+  const [baseSpeedDraft, setBaseSpeedDraft] = useState(150);
 
   // Manual motor states
   const [leftMotor, setLeftMotor] = useState(0);
   const [rightMotor, setRightMotor] = useState(0);
+
+  // Control type: 'sliders' | 'joystick'
+  const [controlType, setControlType] = useState('sliders');
 
   const mode = telemetry?.mode || "idle";
 
@@ -122,33 +248,64 @@ export default function ControlPanel() {
     sendCommand("set_speed", { speed: parseInt(baseSpeed, 10) });
   };
 
+  // Speed slider - apply only on release
+  const handleSpeedSliderChange = (e) => {
+    setBaseSpeedDraft(parseInt(e.target.value, 10));
+  };
+
+  const handleSpeedSliderRelease = () => {
+    setBaseSpeed(baseSpeedDraft);
+  };
+
   // Debounced manual move
   const lastMoveRef = useRef(0);
-  const sendManualMove = (l, r) => {
+  const sendManualMove = useCallback((l, r) => {
     const now = Date.now();
-    if (now - lastMoveRef.current > 100) {
+    if (now - lastMoveRef.current > 80) {
       sendCommand("manual_move", { left: l, right: r });
       lastMoveRef.current = now;
     }
-  };
+  }, [sendCommand]);
 
-  const handleLeftMotor = (e) => {
+  // ======= Pointer-based slider handlers for simultaneous touch =======
+  const handleLeftPointerDown = (e) => {
+    if (mode !== "manual") return;
+    e.target.setPointerCapture(e.pointerId);
+  };
+  const handleLeftChange = (e) => {
     const val = parseInt(e.target.value, 10);
     setLeftMotor(val);
     sendManualMove(val, rightMotor);
   };
 
-  const handleRightMotor = (e) => {
+  const handleRightPointerDown = (e) => {
+    if (mode !== "manual") return;
+    e.target.setPointerCapture(e.pointerId);
+  };
+  const handleRightChange = (e) => {
     const val = parseInt(e.target.value, 10);
     setRightMotor(val);
     sendManualMove(leftMotor, val);
   };
-  
+
   const handleStopManual = () => {
     setLeftMotor(0);
     setRightMotor(0);
     sendCommand("manual_move", { left: 0, right: 0 });
   };
+
+  // Joystick handlers
+  const handleJoystickMove = useCallback((left, right) => {
+    setLeftMotor(left);
+    setRightMotor(right);
+    sendManualMove(left, right);
+  }, [sendManualMove]);
+
+  const handleJoystickRelease = useCallback(() => {
+    setLeftMotor(0);
+    setRightMotor(0);
+    sendCommand("manual_move", { left: 0, right: 0 });
+  }, [sendCommand]);
 
   // Auto-scroll logs
   const terminalRef = useRef(null);
@@ -168,7 +325,7 @@ export default function ControlPanel() {
         </div>
         
         <div className={styles.connBox}>
-          <span className={connected ? styles.dotSuccess : styles.dotError} className={styles.dot}></span>
+          <span className={`${styles.dot} ${connected ? styles.dotSuccess : connected === null ? styles.dotIdle : styles.dotError}`}></span>
           <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)' }}>
             {connected === null ? "Conectando..." : connected ? "Online" : "Offline"}
           </span>
@@ -242,7 +399,7 @@ export default function ControlPanel() {
               </div>
             </div>
             {telemetry?.ir_sensors && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-dim)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-dim)', flexWrap: 'wrap', gap: '8px' }}>
                 <span>Linha: {telemetry.ir_sensors.line_detected ? "SIM" : "NÃO"}</span>
                 <span>Erro PID: {telemetry.pid?.error?.toFixed(1) || "0.0"}</span>
                 <span>Correção: {telemetry.pid?.correction?.toFixed(1) || "0.0"}</span>
@@ -256,37 +413,79 @@ export default function ControlPanel() {
               Controle Manual dos Motores
               {mode !== "manual" && <span style={{fontSize: '0.7rem'}}>(Requer modo MANUAL)</span>}
             </div>
-            
-            <div className={styles.sliderGroup}>
-              <div className={styles.sliderRow}>
-                <span className={styles.sliderLabel}>ESQ</span>
-                <input 
-                  type="range" min="-255" max="255" 
-                  value={leftMotor} onChange={handleLeftMotor}
-                  className={styles.slider}
-                  disabled={mode !== "manual"}
-                />
-                <span className={styles.sliderVal}>{leftMotor}</span>
-              </div>
-              <div className={styles.sliderRow}>
-                <span className={styles.sliderLabel}>DIR</span>
-                <input 
-                  type="range" min="-255" max="255" 
-                  value={rightMotor} onChange={handleRightMotor}
-                  className={styles.slider}
-                  disabled={mode !== "manual"}
-                />
-                <span className={styles.sliderVal}>{rightMotor}</span>
-              </div>
-              <button 
-                className={styles.btnSm} 
-                style={{ marginTop: '8px' }} 
-                onClick={handleStopManual}
+
+            {/* Control type tabs */}
+            <div className={styles.controlTypeTabs}>
+              <button
+                className={`${styles.controlTypeTab} ${controlType === 'sliders' ? styles.controlTypeTabActive : ''}`}
+                onClick={() => setControlType('sliders')}
                 disabled={mode !== "manual"}
               >
-                Parar Rotação
+                <span className={styles.controlTypeTabIcon}>☰</span>
+                Sliders
+              </button>
+              <button
+                className={`${styles.controlTypeTab} ${controlType === 'joystick' ? styles.controlTypeTabActive : ''}`}
+                onClick={() => setControlType('joystick')}
+                disabled={mode !== "manual"}
+              >
+                <span className={styles.controlTypeTabIcon}>◎</span>
+                Joystick
               </button>
             </div>
+            
+            {controlType === 'sliders' ? (
+              <div className={styles.sliderGroup}>
+                <div className={styles.sliderRow}>
+                  <span className={styles.sliderLabel}>ESQ</span>
+                  <input 
+                    type="range" min="-255" max="255" 
+                    value={leftMotor}
+                    onChange={handleLeftChange}
+                    onPointerDown={handleLeftPointerDown}
+                    className={styles.slider}
+                    disabled={mode !== "manual"}
+                    style={{ touchAction: 'none' }}
+                  />
+                  <span className={styles.sliderVal}>{leftMotor}</span>
+                </div>
+                <div className={styles.sliderRow}>
+                  <span className={styles.sliderLabel}>DIR</span>
+                  <input 
+                    type="range" min="-255" max="255" 
+                    value={rightMotor}
+                    onChange={handleRightChange}
+                    onPointerDown={handleRightPointerDown}
+                    className={styles.slider}
+                    disabled={mode !== "manual"}
+                    style={{ touchAction: 'none' }}
+                  />
+                  <span className={styles.sliderVal}>{rightMotor}</span>
+                </div>
+                <button 
+                  className={styles.stopBtn} 
+                  onClick={handleStopManual}
+                  disabled={mode !== "manual"}
+                >
+                  ■ Parar Motores
+                </button>
+              </div>
+            ) : (
+              <>
+                <VirtualJoystick
+                  disabled={mode !== "manual"}
+                  onMove={handleJoystickMove}
+                  onRelease={handleJoystickRelease}
+                />
+                <button 
+                  className={styles.stopBtn} 
+                  onClick={handleStopManual}
+                  disabled={mode !== "manual"}
+                >
+                  ■ Parar Motores
+                </button>
+              </>
+            )}
           </div>
           
         </div>
@@ -312,15 +511,28 @@ export default function ControlPanel() {
                   <input type="number" step="0.01" value={kd} onChange={e => setKd(e.target.value)} />
                 </div>
               </div>
-              <div className={styles.formRow} style={{ marginTop: '12px' }}>
-                <div className={styles.inputGroup}>
-                  <label>Velocidade Base (0-255)</label>
-                  <input type="number" step="1" min="0" max="255" value={baseSpeed} onChange={e => setBaseSpeed(e.target.value)} />
+
+              {/* Speed Slider */}
+              <div className={styles.speedSliderContainer} style={{ marginTop: '16px' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--text-dim)' }}>Velocidade Base</label>
+                <div className={styles.speedSliderRow}>
+                  <input
+                    type="range"
+                    min="0"
+                    max="255"
+                    value={baseSpeedDraft}
+                    onChange={handleSpeedSliderChange}
+                    onMouseUp={handleSpeedSliderRelease}
+                    onTouchEnd={handleSpeedSliderRelease}
+                    className={styles.speedSlider}
+                  />
+                  <span className={styles.speedValue}>{baseSpeedDraft}</span>
                 </div>
-                <button type="submit" className={styles.btnPrimary} style={{ padding: '8px 16px', flex: '0 0 auto' }}>
-                  Aplicar Ganhos
-                </button>
               </div>
+
+              <button type="submit" className={styles.btnPrimary} style={{ padding: '10px 16px', marginTop: '16px', width: '100%' }}>
+                Aplicar Ganhos
+              </button>
             </form>
           </div>
 
