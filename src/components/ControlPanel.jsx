@@ -226,8 +226,9 @@ export default function ControlPanel() {
   // Manual motor states
   const [leftMotor, setLeftMotor] = useState(0);
   const [rightMotor, setRightMotor] = useState(0);
+  const [syncMotor, setSyncMotor] = useState(0);
 
-  // Control type: 'sliders' | 'joystick'
+  // Control type: 'sliders' | 'joystick' | 'sync-slider'
   const [controlType, setControlType] = useState('sliders');
 
   const mode = telemetry?.mode || "idle";
@@ -288,9 +289,22 @@ export default function ControlPanel() {
     sendManualMove(leftMotor, val);
   };
 
+  const handleSyncPointerDown = (e) => {
+    if (mode !== "manual") return;
+    e.target.setPointerCapture(e.pointerId);
+  };
+  const handleSyncChange = (e) => {
+    const val = parseInt(e.target.value, 10);
+    setSyncMotor(val);
+    setLeftMotor(val);
+    setRightMotor(val);
+    sendManualMove(val, val);
+  };
+
   const handleStopManual = () => {
     setLeftMotor(0);
     setRightMotor(0);
+    setSyncMotor(0);
     sendCommand("manual_move", { left: 0, right: 0 });
   };
 
@@ -304,6 +318,7 @@ export default function ControlPanel() {
   const handleJoystickRelease = useCallback(() => {
     setLeftMotor(0);
     setRightMotor(0);
+    setSyncMotor(0);
     sendCommand("manual_move", { left: 0, right: 0 });
   }, [sendCommand]);
 
@@ -432,9 +447,17 @@ export default function ControlPanel() {
                 <span className={styles.controlTypeTabIcon}>◎</span>
                 Joystick
               </button>
+              <button
+                className={`${styles.controlTypeTab} ${controlType === 'sync-slider' ? styles.controlTypeTabActive : ''}`}
+                onClick={() => setControlType('sync-slider')}
+                disabled={mode !== "manual"}
+              >
+                <span className={styles.controlTypeTabIcon}>⇕</span>
+                Sincronizado
+              </button>
             </div>
             
-            {controlType === 'sliders' ? (
+            {controlType === 'sliders' && (
               <div className={styles.sliderGroup}>
                 <div className={styles.sliderRow}>
                   <span className={styles.sliderLabel}>ESQ</span>
@@ -470,7 +493,34 @@ export default function ControlPanel() {
                   ■ Parar Motores
                 </button>
               </div>
-            ) : (
+            )}
+            
+            {controlType === 'sync-slider' && (
+              <div className={styles.sliderGroup}>
+                <div className={styles.sliderRow}>
+                  <span className={styles.sliderLabel}>AMBOS</span>
+                  <input 
+                    type="range" min="-255" max="255" 
+                    value={syncMotor}
+                    onChange={handleSyncChange}
+                    onPointerDown={handleSyncPointerDown}
+                    className={styles.slider}
+                    disabled={mode !== "manual"}
+                    style={{ touchAction: 'none' }}
+                  />
+                  <span className={styles.sliderVal}>{syncMotor}</span>
+                </div>
+                <button 
+                  className={styles.stopBtn} 
+                  onClick={handleStopManual}
+                  disabled={mode !== "manual"}
+                >
+                  ■ Parar Motores
+                </button>
+              </div>
+            )}
+
+            {controlType === 'joystick' && (
               <>
                 <VirtualJoystick
                   disabled={mode !== "manual"}
