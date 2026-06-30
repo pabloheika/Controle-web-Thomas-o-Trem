@@ -90,8 +90,8 @@ function computeMotorsFromXY(x, y, radius) {
   // Y-axis = throttle (up = forward), X-axis = steering
   const throttle = -y / radius; // -1 (back) to 1 (forward)
   const steering = x / radius;  // -1 (left) to 1 (right)
-  let left = throttle + steering;
-  let right = throttle - steering;
+  let left = throttle - steering;
+  let right = throttle + steering;
   // Normalize to -1..1
   const maxVal = Math.max(Math.abs(left), Math.abs(right), 1);
   left = left / maxVal;
