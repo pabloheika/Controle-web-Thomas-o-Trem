@@ -217,11 +217,11 @@ export default function ControlPanel() {
   } = useESP32(espBaseUrl);
 
   // Form states
-  const [kp, setKp] = useState(0.2);
+  const [kp, setKp] = useState(0.5);
   const [ki, setKi] = useState(0.0);
   const [kd, setKd] = useState(1.0);
-  const [baseSpeed, setBaseSpeed] = useState(150);
-  const [baseSpeedDraft, setBaseSpeedDraft] = useState(150);
+  const [baseSpeed, setBaseSpeed] = useState(255);
+  const [baseSpeedDraft, setBaseSpeedDraft] = useState(255);
 
   // Manual motor states
   const [leftMotor, setLeftMotor] = useState(0);
