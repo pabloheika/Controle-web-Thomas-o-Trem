@@ -90,8 +90,8 @@ function computeMotorsFromXY(x, y, radius) {
   // Y-axis = throttle (up = forward), X-axis = steering
   const throttle = -y / radius; // -1 (back) to 1 (forward)
   const steering = x / radius;  // -1 (left) to 1 (right)
-  let left = throttle + steering;
-  let right = throttle - steering;
+  let left = throttle - steering;
+  let right = throttle + steering;
   // Normalize to -1..1
   const maxVal = Math.max(Math.abs(left), Math.abs(right), 1);
   left = left / maxVal;
@@ -217,11 +217,11 @@ export default function ControlPanel() {
   } = useESP32(espBaseUrl);
 
   // Form states
-  const [kp, setKp] = useState(0.2);
+  const [kp, setKp] = useState(0.5);
   const [ki, setKi] = useState(0.0);
   const [kd, setKd] = useState(1.0);
-  const [baseSpeed, setBaseSpeed] = useState(150);
-  const [baseSpeedDraft, setBaseSpeedDraft] = useState(150);
+  const [baseSpeed, setBaseSpeed] = useState(255);
+  const [baseSpeedDraft, setBaseSpeedDraft] = useState(255);
 
   // Manual motor states
   const [leftMotor, setLeftMotor] = useState(0);
